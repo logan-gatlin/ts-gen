@@ -7,3 +7,9 @@ declare class Holder<T> {
 }
 
 declare function identity<T>(value: T): T;
+
+interface EvaluationDetails<T> {
+  flagKey: string;
+  value: T;
+  variant?: string | undefined;
+}

@@ -1081,6 +1081,15 @@ extern "C" {
 }
 ```
 
+Generated dictionary helpers call their extern setters from ordinary Rust, so
+their type parameters carry the narrower ABI bound required at those call
+sites. The extern declarations themselves remain unconstrained:
+
+```rust
+impl<T: ::wasm_bindgen::convert::IntoWasmAbi> EvaluationDetails<T> { /* … */ }
+pub struct EvaluationDetailsBuilder<T: ::wasm_bindgen::convert::IntoWasmAbi> { /* … */ }
+```
+
 This can increase code size because wasm-bindgen generates a separate shim and
 descriptor for every instantiation. The option is experimental and tracks the
 upstream attribute of the same name.

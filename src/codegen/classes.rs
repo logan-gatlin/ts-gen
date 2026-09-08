@@ -173,6 +173,25 @@ impl<'a> ClassConfig<'a> {
         render_generic_bounds(&self.type_param_bounds())
     }
 
+    /// Generic declaration for Rust helper impls and builder structs. The
+    /// erased path keeps the extern declaration's `JsGeneric` bound. The
+    /// per-monomorphization path instead needs `IntoWasmAbi` because helper
+    /// bodies call generated setters with values of these types.
+    fn helper_generics_decl(&self) -> TokenStream {
+        if !self.cgctx.is_some_and(|ctx| ctx.experimental_generic_mono) {
+            return self.type_generics_decl();
+        }
+        let bounds = self
+            .type_params
+            .iter()
+            .map(|tp| {
+                let ident = super::typemap::make_ident(&tp.name);
+                quote! { #ident: ::wasm_bindgen::convert::IntoWasmAbi }
+            })
+            .collect::<Vec<_>>();
+        render_generic_bounds(&bounds)
+    }
+
     /// Tokens for the type's generic-argument list (`<T, …>`) used in
     /// `this: &Type<T, …>` references inside the extern block. Empty
     /// when there are no parameters.
@@ -385,7 +404,7 @@ pub(crate) fn generate_dictionary_factory_with_passes(
     // for non-generic dictionaries, in which case `quote!`
     // interpolation leaves the bare identifier intact.
     let type_args = config.type_generics_args();
-    let type_decl = config.type_generics_decl();
+    let type_decl = config.helper_generics_decl();
     let rust_type = quote! { #rust_type_ident #type_args };
     let builder_name = quote! { #builder_name_ident #type_args };
 

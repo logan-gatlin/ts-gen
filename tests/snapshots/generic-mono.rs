@@ -29,3 +29,44 @@ extern "C" {
     #[wasm_bindgen(catch, js_name = "identity")]
     pub fn try_identity<T>(value: T) -> Result<T, JsValue>;
 }
+#[wasm_bindgen(experimental_generic_mono)]
+extern "C" {
+    # [wasm_bindgen (extends = Object)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub type EvaluationDetails<T>;
+    #[wasm_bindgen(method, getter, js_name = "flagKey")]
+    pub fn flag_key<T>(this: &EvaluationDetails<T>) -> String;
+    #[wasm_bindgen(method, setter, js_name = "flagKey")]
+    pub fn set_flag_key<T>(this: &EvaluationDetails<T>, val: &str);
+    #[wasm_bindgen(method, getter)]
+    pub fn value<T>(this: &EvaluationDetails<T>) -> T;
+    #[wasm_bindgen(method, setter)]
+    pub fn set_value<T>(this: &EvaluationDetails<T>, val: T);
+    #[wasm_bindgen(method, getter)]
+    pub fn variant<T>(this: &EvaluationDetails<T>) -> Option<String>;
+    #[wasm_bindgen(method, setter)]
+    pub fn set_variant<T>(this: &EvaluationDetails<T>, val: &str);
+}
+impl<T: ::wasm_bindgen::convert::IntoWasmAbi> EvaluationDetails<T> {
+    pub fn new(flag_key: &str, value: T) -> EvaluationDetails<T> {
+        Self::builder(flag_key, value).build()
+    }
+    pub fn builder(flag_key: &str, value: T) -> EvaluationDetailsBuilder<T> {
+        let inner: EvaluationDetails<T> = JsCast::unchecked_into(js_sys::Object::new());
+        inner.set_flag_key(flag_key);
+        inner.set_value(value);
+        EvaluationDetailsBuilder { inner }
+    }
+}
+pub struct EvaluationDetailsBuilder<T: ::wasm_bindgen::convert::IntoWasmAbi> {
+    inner: EvaluationDetails<T>,
+}
+impl<T: ::wasm_bindgen::convert::IntoWasmAbi> EvaluationDetailsBuilder<T> {
+    pub fn variant(self, val: &str) -> Self {
+        self.inner.set_variant(val);
+        self
+    }
+    pub fn build(self) -> EvaluationDetails<T> {
+        self.inner
+    }
+}
