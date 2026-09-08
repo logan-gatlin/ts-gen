@@ -210,6 +210,7 @@ fn generate_bindings(entry: &Entry, out_dir: &Path) {
     exports.insert(ts_gen::codegen::ExportSpec::Module(entry.lib_name.clone()));
     let options = ts_gen::codegen::GenerateOptions {
         errors_as_error: false,
+        experimental_generic_mono: false,
         exports,
     };
     let rust_code = ts_gen::codegen::generate_with_options(&module, &gctx, &options)

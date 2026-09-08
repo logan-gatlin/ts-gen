@@ -1068,6 +1068,23 @@ pub fn put<T: ::wasm_bindgen::JsGeneric>(this: &KeyValueStore, key: &str, value:
 pub fn get<T: ::wasm_bindgen::JsGeneric>(this: &KeyValueStore, key: &str) -> Option<T>;
 ```
 
+Passing `--experimental-generic-mono` selects wasm-bindgen's experimental
+per-monomorphization path. Every generated extern block receives
+`experimental_generic_mono`, type parameters omit the `JsGeneric` bound, and
+bare type-parameter arguments are passed by value so each concrete Rust type
+uses its native ABI representation:
+
+```rust
+#[wasm_bindgen(experimental_generic_mono)]
+extern "C" {
+    pub fn identity<T>(value: T) -> T;
+}
+```
+
+This can increase code size because wasm-bindgen generates a separate shim and
+descriptor for every instantiation. The option is experimental and tracks the
+upstream attribute of the same name.
+
 Parse-time, every type-parameter-bearing declaration (class,
 interface, type alias, method, function, namespace) creates a child
 **body scope** with its `<T, ...>` bound as

@@ -194,11 +194,16 @@ impl<'a> ClassConfig<'a> {
     /// signature types) and ABV widening bounds (`<Tn: TypedArray>`)
     /// into a single `<...>` declaration on each emitted `fn`.
     fn type_param_bounds(&self) -> Vec<TokenStream> {
+        let per_mono = self.cgctx.is_some_and(|ctx| ctx.experimental_generic_mono);
         self.type_params
             .iter()
             .map(|tp| {
                 let ident = super::typemap::make_ident(&tp.name);
-                quote! { #ident: ::wasm_bindgen::JsGeneric }
+                if per_mono {
+                    quote! { #ident }
+                } else {
+                    quote! { #ident: ::wasm_bindgen::JsGeneric }
+                }
             })
             .collect()
     }
@@ -227,7 +232,11 @@ impl<'a> ClassConfig<'a> {
             .filter(|n| !type_level.contains(n.as_str()))
             .map(|n| {
                 let ident = super::typemap::make_ident(&n);
-                quote! { #ident: ::wasm_bindgen::JsGeneric }
+                if cgctx.experimental_generic_mono {
+                    quote! { #ident }
+                } else {
+                    quote! { #ident: ::wasm_bindgen::JsGeneric }
+                }
             })
             .collect()
     }
@@ -1089,7 +1098,21 @@ pub(crate) fn generate_extern_block(config: &ClassConfig) -> TokenStream {
                     .first()
                     .map(|c| &c.throws)
                     .unwrap_or(&empty_throws);
-                let return_type = TypeRef::ident(config.rust_name.clone());
+                let per_mono = config
+                    .cgctx
+                    .is_some_and(|ctx| ctx.experimental_generic_mono);
+                let return_type = if per_mono && !config.type_params.is_empty() {
+                    TypeRef::generic(
+                        config.rust_name.clone(),
+                        config
+                            .type_params
+                            .iter()
+                            .map(|tp| TypeRef::ident(tp.name.clone()))
+                            .collect(),
+                    )
+                } else {
+                    TypeRef::ident(config.rust_name.clone())
+                };
                 let sigs = build_signatures(
                     &CallableSpec {
                         js_name: &config.js_name,
@@ -1194,9 +1217,16 @@ pub(crate) fn generate_extern_block(config: &ClassConfig) -> TokenStream {
     }
 
     // Build the extern block with optional module attribute
-    let wb_extern_attr = match &config.module {
-        Some(m) => quote! { #[wasm_bindgen(module = #m)] },
-        None => quote! { #[wasm_bindgen] },
+    let per_mono = config
+        .cgctx
+        .is_some_and(|ctx| ctx.experimental_generic_mono);
+    let wb_extern_attr = match (&config.module, per_mono) {
+        (Some(m), true) => {
+            quote! { #[wasm_bindgen(module = #m, experimental_generic_mono)] }
+        }
+        (Some(m), false) => quote! { #[wasm_bindgen(module = #m)] },
+        (None, true) => quote! { #[wasm_bindgen(experimental_generic_mono)] },
+        (None, false) => quote! { #[wasm_bindgen] },
     };
 
     // Re-export the type under its original (un-suffixed) name when collision
@@ -1355,10 +1385,19 @@ fn generate_expanded_constructor(config: &ClassConfig, sig: &FunctionSignature) 
         wb_parts.push(quote! { js_name = #js_name });
     }
 
+    let generics = if config
+        .cgctx
+        .is_some_and(|ctx| ctx.experimental_generic_mono)
+    {
+        generic_params_for_method(config, sig)
+    } else {
+        quote! {}
+    };
+
     quote! {
         #doc
         #[wasm_bindgen(#(#wb_parts),*)]
-        pub fn #rust_ident(#params) -> #ret;
+        pub fn #rust_ident #generics (#params) -> #ret;
     }
 }
 

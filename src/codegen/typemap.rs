@@ -172,6 +172,9 @@ pub struct CodegenContext<'a> {
     /// `Error` rather than `JsValue`. See
     /// [`crate::codegen::GenerateOptions::errors_as_error`].
     pub errors_as_error: bool,
+    /// Whether generic imports use wasm-bindgen's experimental
+    /// per-monomorphization codegen rather than type erasure.
+    pub experimental_generic_mono: bool,
     /// JS module specifiers whose declarations are lifted into global
     /// scope. References to types from these modules emit without the
     /// `mod_name::` qualifier — they live alongside the global decls.
@@ -368,7 +371,7 @@ impl<'a> CodegenContext<'a> {
     /// Build a `CodegenContext` from a parsed IR module + global context.
     /// Used by tests and library callers that don't customise codegen.
     pub fn from_module(module: &ir::Module, gctx: &'a GlobalContext) -> Self {
-        Self::from_module_full(module, gctx, false, HashSet::new())
+        Self::from_module_full(module, gctx, false, false, HashSet::new())
     }
 
     /// Build a `CodegenContext` with the full set of per-codegen options
@@ -377,6 +380,7 @@ impl<'a> CodegenContext<'a> {
         module: &ir::Module,
         gctx: &'a GlobalContext,
         errors_as_error: bool,
+        experimental_generic_mono: bool,
         exported_modules: HashSet<String>,
     ) -> Self {
         // Pre-compute which `Module(spec)` groups are fully covered by
@@ -417,6 +421,7 @@ impl<'a> CodegenContext<'a> {
             diagnostics: RefCell::new(DiagnosticCollector::new()),
             dynamic_unions: RefCell::new(DynamicUnionRegistry::default()),
             errors_as_error,
+            experimental_generic_mono,
             exported_modules,
             externalised_modules,
             unresolved_module_refs: RefCell::new(HashSet::new()),
@@ -451,6 +456,7 @@ impl<'a> CodegenContext<'a> {
             diagnostics: RefCell::new(DiagnosticCollector::new()),
             dynamic_unions: RefCell::new(DynamicUnionRegistry::default()),
             errors_as_error: false,
+            experimental_generic_mono: false,
             exported_modules: HashSet::new(),
             externalised_modules: HashSet::new(),
             unresolved_module_refs: RefCell::new(HashSet::new()),
@@ -987,6 +993,21 @@ pub fn to_syn_type(
             }
             if segments.len() == 1 && generic_args.is_empty() {
                 if let Some(c) = ctx {
+                    if c.experimental_generic_mono
+                        && matches!(
+                            c.gctx.scopes.resolve_binding(scope, &segments[0]),
+                            Some(crate::parse::scope::Binding::TypeParam),
+                        )
+                    {
+                        return lower_reference(
+                            segments,
+                            generic_args,
+                            pos,
+                            ctx,
+                            scope,
+                            from_module,
+                        );
+                    }
                     if let Some(target) = c.resolve_alias(&segments[0], scope) {
                         let target = target.clone();
                         return to_syn_type(&target, pos, ctx, scope, from_module);

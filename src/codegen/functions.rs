@@ -141,9 +141,14 @@ fn generate_expanded_free_function(
         quote! {}
     };
 
-    let wb_extern_attr = match ctx {
-        ModuleContext::Module(m) => quote! { #[wasm_bindgen(module = #m)] },
-        ModuleContext::Global => quote! { #[wasm_bindgen] },
+    let per_mono = cgctx.is_some_and(|ctx| ctx.experimental_generic_mono);
+    let wb_extern_attr = match (ctx, per_mono) {
+        (ModuleContext::Module(m), true) => {
+            quote! { #[wasm_bindgen(module = #m, experimental_generic_mono)] }
+        }
+        (ModuleContext::Module(m), false) => quote! { #[wasm_bindgen(module = #m)] },
+        (ModuleContext::Global, true) => quote! { #[wasm_bindgen(experimental_generic_mono)] },
+        (ModuleContext::Global, false) => quote! { #[wasm_bindgen] },
     };
 
     let generics = generic_params_for_function(sig, cgctx);
@@ -182,7 +187,11 @@ fn generic_params_for_function(
         .iter()
         .map(|n| super::typemap::make_ident(n))
         .collect::<Vec<_>>();
-    quote! { <#(#idents: ::wasm_bindgen::JsGeneric),*> }
+    if cgctx.experimental_generic_mono {
+        quote! { <#(#idents),*> }
+    } else {
+        quote! { <#(#idents: ::wasm_bindgen::JsGeneric),*> }
+    }
 }
 
 /// Generate a wasm_bindgen extern block for a global constant/variable.
@@ -209,9 +218,14 @@ pub fn generate_variable(
 
     let wb_attr = quote! { #[wasm_bindgen(#(#wb_parts),*)] };
 
-    let wb_extern_attr = match ctx {
-        ModuleContext::Module(m) => quote! { #[wasm_bindgen(module = #m)] },
-        ModuleContext::Global => quote! { #[wasm_bindgen] },
+    let per_mono = cgctx.is_some_and(|ctx| ctx.experimental_generic_mono);
+    let wb_extern_attr = match (ctx, per_mono) {
+        (ModuleContext::Module(m), true) => {
+            quote! { #[wasm_bindgen(module = #m, experimental_generic_mono)] }
+        }
+        (ModuleContext::Module(m), false) => quote! { #[wasm_bindgen(module = #m)] },
+        (ModuleContext::Global, true) => quote! { #[wasm_bindgen(experimental_generic_mono)] },
+        (ModuleContext::Global, false) => quote! { #[wasm_bindgen] },
     };
 
     quote! {

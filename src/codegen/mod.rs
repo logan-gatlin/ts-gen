@@ -64,6 +64,11 @@ pub struct GenerateOptions {
     /// error rather than the silent `JsValue` pass-through.
     pub errors_as_error: bool,
 
+    /// Opt generic imports into wasm-bindgen's experimental
+    /// per-monomorphization codegen. Type parameters are emitted without
+    /// `JsGeneric` bounds and cross the ABI at their concrete Rust types.
+    pub experimental_generic_mono: bool,
+
     /// The output surface — the authoritative list of inputs (files /
     /// modules) whose declarations are emitted. The `--input` set
     /// still defines the *type universe* for resolution; `exports`
@@ -172,8 +177,13 @@ fn generate_tokens(
             ExportSpec::File(_) => None,
         })
         .collect();
-    let cgctx =
-        CodegenContext::from_module_full(module, gctx, options.errors_as_error, exported_modules);
+    let cgctx = CodegenContext::from_module_full(
+        module,
+        gctx,
+        options.errors_as_error,
+        options.experimental_generic_mono,
+        exported_modules,
+    );
 
     let preamble = quote! {
         #[allow(unused_imports)]
