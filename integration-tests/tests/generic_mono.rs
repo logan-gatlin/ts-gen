@@ -1,11 +1,11 @@
 #![cfg(target_arch = "wasm32")]
 
-use js_sys::{Array, ArrayTuple, Function, JsString, Map};
+use js_sys::{Array, ArrayTuple, Function, JsString, Map, Uint8Array};
 use wasm_bindgen::JsValue;
 
 use ts_gen_integration_tests::generic_mono::{
     parse_string, parse_string_js_string, roundtrip_boolean, roundtrip_number, try_parse_string,
-    try_parse_string_js_string, EvaluationDetails, Flags, Pair,
+    try_parse_string_js_string, EvaluationDetails, Flags, Pair, TypedArrayOptions,
 };
 
 #[allow(dead_code)]
@@ -51,4 +51,7 @@ async fn generic_mono_signatures_compile(flags: &Flags, js_string: &JsString) {
     let _ = EvaluationDetails::<bool>::new(String::from("flag"), false);
     let _ = EvaluationDetails::<bool>::new(js_string, false);
     let _ = EvaluationDetails::<bool>::new(js_string.clone(), false);
+
+    let bytes = Uint8Array::new_with_length(1);
+    let _ = TypedArrayOptions::new(&bytes);
 }

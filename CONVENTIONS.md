@@ -1090,6 +1090,17 @@ impl<T: ::wasm_bindgen::convert::IntoWasmAbi> EvaluationDetails<T> { /* … */ }
 pub struct EvaluationDetailsBuilder<T: ::wasm_bindgen::convert::IntoWasmAbi> { /* … */ }
 ```
 
+Array-buffer-view helper parameters retain their `TypedArray` widening bound.
+In per-monomorphization mode the helper also repeats the reference ABI bound
+that wasm-bindgen places on the generated import shim:
+
+```rust
+pub fn new<T: ::js_sys::TypedArray>(value: &T) -> TypedArrayOptions
+where
+    for<'__wbg> &'__wbg T: ::wasm_bindgen::convert::IntoWasmAbi,
+{ /* … */ }
+```
+
 Concrete primitive arguments to locally declared generic types use native Rust
 ABIs in this mode: `Details<boolean>`, `Details<number>`, and `Details<string>`
 become `Details<bool>`, `Details<f64>`, and `Details<String>`. This native-leaf

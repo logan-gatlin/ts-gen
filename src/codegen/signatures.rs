@@ -1379,16 +1379,21 @@ fn fresh_string_generic(
 /// casts. All other types pass through `generate_concrete_params`.
 ///
 /// Returns each synthesised ABV bound as a separate `TokenStream` (e.g.
-/// `T: ::js_sys::TypedArray`). Callers compose these with type-level
-/// generic bounds (`T: ::wasm_bindgen::JsGeneric`) via
-/// [`render_generic_bounds`] so a single `<...>` declaration carries
-/// every bound the `fn` needs.
+/// `T: ::js_sys::TypedArray`), a helper-only `where` clause, and the rendered
+/// parameters. Callers compose the declarations with type-level generic bounds
+/// (`T: ::wasm_bindgen::JsGeneric`) via [`render_generic_bounds`] so a single
+/// `<...>` declaration carries every bound the `fn` needs.
+///
+/// Under per-monomorphization codegen, ordinary Rust helpers that call an
+/// imported `&T` parameter must repeat the macro-generated reference ABI bound.
+/// Extern declarations ignore the returned clause because wasm-bindgen adds
+/// that requirement to their generated call shim itself.
 pub fn generate_dictionary_params(
     params: &[ConcreteParam],
     cgctx: Option<&CodegenContext<'_>>,
     scope: ScopeId,
     from_module: &crate::ir::ModuleContext,
-) -> (Vec<TokenStream>, TokenStream) {
+) -> (Vec<TokenStream>, TokenStream, TokenStream) {
     let mut generic_idents: Vec<syn::Ident> = Vec::new();
     let mut string_idents: Vec<syn::Ident> = Vec::new();
     let items: Vec<_> = params
@@ -1442,7 +1447,17 @@ pub fn generate_dictionary_params(
             .collect::<Vec<_>>(),
     );
 
-    (bounds, quote! { #(#items),* })
+    let helper_where_clause =
+        if cgctx.is_some_and(|ctx| ctx.experimental_generic_mono) && !generic_idents.is_empty() {
+            quote! {
+                where
+                    #(for<'__wbg> &'__wbg #generic_idents: ::wasm_bindgen::convert::IntoWasmAbi),*
+            }
+        } else {
+            quote! {}
+        };
+
+    (bounds, helper_where_clause, quote! { #(#items),* })
 }
 
 /// Wrap a list of `<T: Bound>` token streams into a `<T: Bound, U: Bound>`

@@ -103,6 +103,26 @@ impl<A: ::wasm_bindgen::convert::IntoWasmAbi, B: ::wasm_bindgen::convert::IntoWa
 extern "C" {
     # [wasm_bindgen (extends = Object)]
     #[derive(Debug, Clone, PartialEq, Eq)]
+    pub type TypedArrayOptions;
+    #[wasm_bindgen(method, getter)]
+    pub fn value(this: &TypedArrayOptions) -> Uint8Array;
+    #[wasm_bindgen(method, setter)]
+    pub fn set_value<T: ::js_sys::TypedArray>(this: &TypedArrayOptions, val: &T);
+}
+impl TypedArrayOptions {
+    pub fn new<T: ::js_sys::TypedArray>(value: &T) -> TypedArrayOptions
+    where
+        for<'__wbg> &'__wbg T: ::wasm_bindgen::convert::IntoWasmAbi,
+    {
+        let inner: TypedArrayOptions = JsCast::unchecked_into(js_sys::Object::new());
+        inner.set_value(value);
+        inner
+    }
+}
+#[wasm_bindgen(module = "generic-mono", experimental_generic_mono)]
+extern "C" {
+    # [wasm_bindgen (extends = Object)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
     pub type Flags;
     #[wasm_bindgen(method, catch, js_name = "getStringValue")]
     pub async fn get_string_value<S: ::wasm_bindgen::JsStringLike>(

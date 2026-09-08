@@ -19,6 +19,10 @@ export interface Pair<A, B> {
   second: B;
 }
 
+export interface TypedArrayOptions {
+  value: ArrayBufferView;
+}
+
 export declare class Flags {
   getStringValue(defaultValue: string): Promise<string>;
   getStringDetails(defaultValue: string): Promise<EvaluationDetails<string>>;

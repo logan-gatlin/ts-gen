@@ -863,7 +863,7 @@ pub(crate) fn generate_dictionary_factory_with_passes(
                 continue;
             }
             let new_ident = super::typemap::make_ident(&format!("new{full_suffix}"));
-            let (abv_bounds, params_tokens) = generate_dictionary_params(
+            let (abv_bounds, helper_where_clause, params_tokens) = generate_dictionary_params(
                 &plan.value_params,
                 config.cgctx,
                 config.scope,
@@ -942,13 +942,17 @@ pub(crate) fn generate_dictionary_factory_with_passes(
                 let builder_ident = super::typemap::make_ident(&format!("builder{full_suffix}"));
                 builder_variants.push(quote! {
                     #doc_attr
-                    pub fn #builder_ident #generics (#params_tokens) -> #builder_name {
+                    pub fn #builder_ident #generics (#params_tokens) -> #builder_name
+                    #helper_where_clause
+                    {
                         #builder_body
                     }
                 });
                 new_variants.push(quote! {
                     #doc_attr
-                    pub fn #new_ident #generics (#params_tokens) -> #rust_type {
+                    pub fn #new_ident #generics (#params_tokens) -> #rust_type
+                    #helper_where_clause
+                    {
                         Self::#builder_ident(#(#arg_idents),*).build()
                     }
                 });
@@ -972,7 +976,9 @@ pub(crate) fn generate_dictionary_factory_with_passes(
                 };
                 new_variants.push(quote! {
                     #doc_attr
-                    pub fn #new_ident #generics (#params_tokens) -> #rust_type {
+                    pub fn #new_ident #generics (#params_tokens) -> #rust_type
+                    #helper_where_clause
+                    {
                         #body
                     }
                 });
@@ -1695,7 +1701,7 @@ fn generate_setter(
     sigs.iter()
         .map(|sig| {
             let rust_ident = super::typemap::make_ident(&sig.rust_name);
-            let (abv_bounds, params) = generate_dictionary_params(
+            let (abv_bounds, _helper_where_clause, params) = generate_dictionary_params(
                 &sig.params,
                 config.cgctx,
                 config.scope,
@@ -1843,7 +1849,7 @@ fn generate_static_setter(
     sigs.iter()
         .map(|sig| {
             let rust_ident = super::typemap::make_ident(&sig.rust_name);
-            let (abv_bounds, params) = generate_dictionary_params(
+            let (abv_bounds, _helper_where_clause, params) = generate_dictionary_params(
                 &sig.params,
                 config.cgctx,
                 config.scope,
