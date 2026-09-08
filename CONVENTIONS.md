@@ -1090,6 +1090,29 @@ impl<T: ::wasm_bindgen::convert::IntoWasmAbi> EvaluationDetails<T> { /* … */ }
 pub struct EvaluationDetailsBuilder<T: ::wasm_bindgen::convert::IntoWasmAbi> { /* … */ }
 ```
 
+Concrete primitive arguments to locally declared generic types use native Rust
+ABIs in this mode: `Details<boolean>`, `Details<number>`, and `Details<string>`
+become `Details<bool>`, `Details<f64>`, and `Details<String>`. This native-leaf
+rule is deliberately limited to user declarations. Built-in JS containers,
+tuples, iterators, and callbacks retain their established wrapper elements
+(`Array<JsString>`, `Map<JsString, JsString>`, and so on).
+
+Direct string arguments become fresh inferred `S: JsStringLike` parameters,
+allowing `&str`, `String`, `&JsString`, and `JsString` without caller-side
+conversion. String returns remain concrete and get one additive zero-copy
+variant bound to the same JS name:
+
+```rust
+pub fn value<S: ::wasm_bindgen::JsStringLike>(default_value: S) -> String;
+#[wasm_bindgen(js_name = "value")]
+pub fn value_js_string<S: ::wasm_bindgen::JsStringLike>(default_value: S) -> JsString;
+```
+
+The return transform preserves nullable, fallible, and locally declared
+generic wrappers. If a return has multiple eligible string leaves, one
+`_js_string` method replaces all of them rather than generating a Cartesian
+set of variants.
+
 This can increase code size because wasm-bindgen generates a separate shim and
 descriptor for every instantiation. The option is experimental and tracks the
 upstream attribute of the same name.

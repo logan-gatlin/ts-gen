@@ -28,9 +28,9 @@ use quote::quote;
 use std::collections::HashMap;
 
 use crate::codegen::signatures::{
-    build_signatures, dedupe_name, generate_concrete_params, generate_dictionary_params,
-    is_void_return, public_rust_name, render_generic_bounds, CallableSpec, ConcreteParam,
-    FunctionSignature, SignatureKind,
+    build_signatures, dedupe_name, generate_concrete_params_with_mono_strings,
+    generate_dictionary_params, is_void_return, public_rust_name, render_generic_bounds,
+    CallableSpec, ConcreteParam, FunctionSignature, SignatureKind,
 };
 use crate::codegen::typemap::{to_return_type, CodegenContext, TypePosition};
 use crate::ir::{
@@ -990,19 +990,20 @@ pub(crate) fn generate_dictionary_factory_with_passes(
             let builder_method_name = public_rust_name(builder_method_name);
             let method_ident = super::typemap::make_ident(&builder_method_name);
             let setter_ident = super::typemap::make_ident(&sig.rust_name);
-            let params = generate_concrete_params(
+            let (string_bounds, params) = generate_concrete_params_with_mono_strings(
                 &sig.params,
                 config.cgctx,
                 config.scope,
                 &config.from_module(),
             );
+            let string_generics = render_generic_bounds(&string_bounds);
             let param_idents: Vec<_> = sig
                 .params
                 .iter()
                 .map(|p| super::typemap::make_ident(&p.name))
                 .collect();
             builder_methods.push(quote! {
-                pub fn #method_ident(self, #params) -> Self {
+                pub fn #method_ident #string_generics (self, #params) -> Self {
                     self.inner.#setter_ident(#(#param_idents),*);
                     self
                 }
@@ -1354,7 +1355,7 @@ fn generate_type_decl(config: &ClassConfig) -> TokenStream {
 /// (`<Tn: TypedArray>`) don't apply to methods — they're emitted
 /// only at the dictionary-factory / setter sites that use
 /// [`generate_dictionary_params`].
-fn generic_params_for_method(config: &ClassConfig, sig: &FunctionSignature) -> TokenStream {
+fn generic_bounds_for_method(config: &ClassConfig, sig: &FunctionSignature) -> Vec<TokenStream> {
     let mut bounds = config.type_param_bounds();
     let sig_tys: Vec<&TypeRef> = sig
         .params
@@ -1363,14 +1364,19 @@ fn generic_params_for_method(config: &ClassConfig, sig: &FunctionSignature) -> T
         .chain(std::iter::once(&sig.return_type))
         .collect();
     bounds.extend(config.local_generic_bounds(sig.body_scope, &sig_tys));
-    render_generic_bounds(&bounds)
+    bounds
 }
 
 /// Generate a constructor binding from a resolved signature.
 fn generate_expanded_constructor(config: &ClassConfig, sig: &FunctionSignature) -> TokenStream {
     let rust_ident = super::typemap::make_ident(&sig.rust_name);
     let scope = sig.body_scope;
-    let params = generate_concrete_params(&sig.params, config.cgctx, scope, &config.from_module());
+    let (string_bounds, params) = generate_concrete_params_with_mono_strings(
+        &sig.params,
+        config.cgctx,
+        scope,
+        &config.from_module(),
+    );
     let doc = super::doc_tokens(&sig.doc);
 
     // Constructors always return the constructed type, wrapped in Result
@@ -1408,7 +1414,9 @@ fn generate_expanded_constructor(config: &ClassConfig, sig: &FunctionSignature) 
         .cgctx
         .is_some_and(|ctx| ctx.experimental_generic_mono)
     {
-        generic_params_for_method(config, sig)
+        let mut bounds = generic_bounds_for_method(config, sig);
+        bounds.extend(string_bounds);
+        render_generic_bounds(&bounds)
     } else {
         quote! {}
     };
@@ -1428,7 +1436,7 @@ fn generate_expanded_method(config: &ClassConfig, sig: &FunctionSignature) -> To
     // names through that scope so `T` (etc.) lowers to a bare ident
     // rather than slipping through to `emit_type_name`.
     let method_scope = sig.body_scope;
-    let params = generate_concrete_params(
+    let (string_bounds, params) = generate_concrete_params_with_mono_strings(
         &sig.params,
         config.cgctx,
         method_scope,
@@ -1479,7 +1487,9 @@ fn generate_expanded_method(config: &ClassConfig, sig: &FunctionSignature) -> To
         quote! {}
     };
 
-    let method_generics = generic_params_for_method(config, sig);
+    let mut bounds = generic_bounds_for_method(config, sig);
+    bounds.extend(string_bounds);
+    let method_generics = render_generic_bounds(&bounds);
     let this_generics = config.type_generics_args();
 
     quote! {
@@ -1494,7 +1504,12 @@ fn generate_expanded_static_method(config: &ClassConfig, sig: &FunctionSignature
     let rust_ident = super::typemap::make_ident(&sig.rust_name);
     let class_ident = super::typemap::make_ident(&config.effective_rust_name());
     let scope = sig.body_scope;
-    let params = generate_concrete_params(&sig.params, config.cgctx, scope, &config.from_module());
+    let (string_bounds, params) = generate_concrete_params_with_mono_strings(
+        &sig.params,
+        config.cgctx,
+        scope,
+        &config.from_module(),
+    );
     let doc = super::doc_tokens(&sig.doc);
     let has_variadic = sig.params.last().is_some_and(|p| p.variadic);
 
@@ -1539,7 +1554,9 @@ fn generate_expanded_static_method(config: &ClassConfig, sig: &FunctionSignature
         quote! {}
     };
 
-    let generics = generic_params_for_method(config, sig);
+    let mut bounds = generic_bounds_for_method(config, sig);
+    bounds.extend(string_bounds);
+    let generics = render_generic_bounds(&bounds);
 
     quote! {
         #doc
@@ -1610,10 +1627,33 @@ fn generate_getter(
     let fn_generics = render_generic_bounds(&bounds);
     let this_generics = config.type_generics_args();
 
+    let js_string_variant = config
+        .cgctx
+        .filter(|ctx| ctx.experimental_generic_mono)
+        .and_then(|ctx| super::signatures::js_string_return_type(&lowered_ty, ctx))
+        .map(|js_ty| {
+            let js_name = dedupe_name(&format!("{rust_name}_js_string"), used_names);
+            let js_ident = super::typemap::make_ident(&js_name);
+            let js_type = super::typemap::to_getter_return_type(
+                &js_ty,
+                config.cgctx,
+                config.scope,
+                &config.from_module(),
+                anchor,
+            );
+            let source_name = &getter.js_name;
+            quote! {
+                #doc
+                #[wasm_bindgen(method, getter, js_name = #source_name)]
+                pub fn #js_ident #fn_generics (this: &#this_type #this_generics) -> #js_type;
+            }
+        });
+
     quote! {
         #doc
         #[wasm_bindgen(#(#wb_parts),*)]
         pub fn #rust_ident #fn_generics (this: &#this_type #this_generics) -> #getter_type;
+        #js_string_variant
     }
 }
 
@@ -1733,10 +1773,37 @@ fn generate_static_getter(
     bounds.extend(config.local_generic_bounds(config.scope, &[&getter.type_ref]));
     let fn_generics = render_generic_bounds(&bounds);
 
+    let js_string_variant = config
+        .cgctx
+        .filter(|ctx| ctx.experimental_generic_mono)
+        .and_then(|ctx| super::signatures::js_string_return_type(&getter.type_ref, ctx))
+        .map(|js_ty| {
+            let js_name = dedupe_name(&format!("{rust_name}_js_string"), used_names);
+            let js_ident = super::typemap::make_ident(&js_name);
+            let js_type = super::typemap::to_getter_return_type(
+                &js_ty,
+                config.cgctx,
+                config.scope,
+                &config.from_module(),
+                super::typemap::ReturnAnchor {
+                    base: &getter.js_name,
+                    kind: super::typemap::ReturnAnchorKind::Getter,
+                    parent: Some(&config.rust_name),
+                },
+            );
+            let source_name = &getter.js_name;
+            quote! {
+                #doc
+                #[wasm_bindgen(static_method_of = #class_ident, getter, js_name = #source_name)]
+                pub fn #js_ident #fn_generics () -> #js_type;
+            }
+        });
+
     quote! {
         #doc
         #[wasm_bindgen(#(#wb_parts),*)]
         pub fn #rust_ident #fn_generics () -> #getter_type;
+        #js_string_variant
     }
 }
 

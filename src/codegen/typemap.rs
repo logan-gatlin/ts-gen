@@ -1398,12 +1398,63 @@ fn lower_reference(
         }
         return base;
     }
-    let inner_pos = pos.to_inner();
     let arg_tokens: Vec<TokenStream> = generic_args
         .iter()
-        .map(|a| to_syn_type(a, inner_pos, ctx, scope, from_module))
+        .map(|a| {
+            if ctx.is_some_and(|c| c.experimental_generic_mono) {
+                to_mono_user_generic_arg(a, ctx, scope, from_module)
+            } else {
+                to_syn_type(a, pos.to_inner(), ctx, scope, from_module)
+            }
+        })
         .collect();
     quote! { #base<#(#arg_tokens),*> }
+}
+
+/// Lower an argument of a locally declared generic type in per-mono mode.
+/// Primitive leaves use their native Rust ABI, while built-in JS containers
+/// remain on the established inner-position wrapper mapping.
+fn to_mono_user_generic_arg(
+    ty: &TypeRef,
+    ctx: Option<&CodegenContext<'_>>,
+    scope: ScopeId,
+    from_module: &ModuleContext,
+) -> TokenStream {
+    match ty {
+        TypeRef::Boolean
+        | TypeRef::BooleanLiteral(_)
+        | TypeRef::Number
+        | TypeRef::NumberLiteral(_)
+        | TypeRef::String
+        | TypeRef::StringLiteral(_) => {
+            to_syn_type(ty, TypePosition::RETURN, ctx, scope, from_module)
+        }
+        TypeRef::Nullable(inner) => {
+            let inner = to_mono_user_generic_arg(inner, ctx, scope, from_module);
+            quote! { Option<#inner> }
+        }
+        TypeRef::Reference {
+            segments,
+            generic_args,
+        } if segments.len() == 1
+            && !generic_args.is_empty()
+            && ctx.is_some_and(|c| {
+                c.local_type_param_counts
+                    .get(&segments[0])
+                    .is_some_and(|count| *count > 0)
+            }) =>
+        {
+            to_syn_type(ty, TypePosition::RETURN, ctx, scope, from_module)
+        }
+        TypeRef::Union(members) => {
+            if let Some(lub) = crate::codegen::subtyping::lub_union(members, ctx, scope) {
+                to_mono_user_generic_arg(&lub, ctx, scope, from_module)
+            } else {
+                to_syn_type(ty, TypePosition::RETURN.to_inner(), ctx, scope, from_module)
+            }
+        }
+        _ => to_syn_type(ty, TypePosition::RETURN.to_inner(), ctx, scope, from_module),
+    }
 }
 
 /// Create a `syn::Ident`, sanitizing invalid characters and escaping keywords.
@@ -1463,7 +1514,11 @@ pub fn to_return_type(
     //
     // Top-level (non-`is_async`) returns also participate in
     // dynamic-union synthesis — see [`maybe_synthesise_return_union`].
-    let inner = if !is_async {
+    let mono_native_return = is_async
+        && ctx.is_some_and(|c| {
+            c.experimental_generic_mono && is_mono_native_return_shape(ty, c, scope)
+        });
+    let inner = if !is_async || mono_native_return {
         match maybe_synthesise_return_union(ty, ctx, scope, anchor) {
             Some(tokens) => tokens,
             None => to_syn_type(ty, TypePosition::RETURN, ctx, scope, from_module),
@@ -1480,6 +1535,36 @@ pub fn to_return_type(
         quote! { Result<#inner, #err> }
     } else {
         inner
+    }
+}
+
+/// Whether an async per-monomorphization return should keep Rust-native
+/// lowering instead of using the wrapper-only mapping required inside
+/// built-in JS containers.
+fn is_mono_native_return_shape(ty: &TypeRef, ctx: &CodegenContext<'_>, scope: ScopeId) -> bool {
+    match ty {
+        TypeRef::Boolean
+        | TypeRef::BooleanLiteral(_)
+        | TypeRef::Number
+        | TypeRef::NumberLiteral(_)
+        | TypeRef::String
+        | TypeRef::StringLiteral(_) => true,
+        TypeRef::Nullable(inner) => is_mono_native_return_shape(inner, ctx, scope),
+        TypeRef::Reference {
+            segments,
+            generic_args,
+        } => {
+            (segments.len() == 1 && generic_args.is_empty() && segments[0] == "JsString")
+                || (segments.len() == 1
+                    && !generic_args.is_empty()
+                    && ctx
+                        .local_type_param_counts
+                        .get(&segments[0])
+                        .is_some_and(|count| *count > 0))
+        }
+        TypeRef::Union(members) => crate::codegen::subtyping::lub_union(members, Some(ctx), scope)
+            .is_some_and(|lub| is_mono_native_return_shape(&lub, ctx, scope)),
+        _ => false,
     }
 }
 

@@ -4,7 +4,7 @@
 use js_sys::*;
 #[allow(unused_imports)]
 use wasm_bindgen::prelude::*;
-#[wasm_bindgen(experimental_generic_mono)]
+#[wasm_bindgen(module = "generic-mono", experimental_generic_mono)]
 extern "C" {
     # [wasm_bindgen (extends = Object)]
     #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,38 +20,45 @@ extern "C" {
     #[wasm_bindgen(method, catch, js_name = "set")]
     pub fn try_set<T>(this: &Holder<T>, value: T) -> Result<(), JsValue>;
 }
-#[wasm_bindgen(experimental_generic_mono)]
+#[wasm_bindgen(module = "generic-mono", experimental_generic_mono)]
 extern "C" {
     pub fn identity<T>(value: T) -> T;
 }
-#[wasm_bindgen(experimental_generic_mono)]
+#[wasm_bindgen(module = "generic-mono", experimental_generic_mono)]
 extern "C" {
     #[wasm_bindgen(catch, js_name = "identity")]
     pub fn try_identity<T>(value: T) -> Result<T, JsValue>;
 }
-#[wasm_bindgen(experimental_generic_mono)]
+#[wasm_bindgen(module = "generic-mono", experimental_generic_mono)]
 extern "C" {
     # [wasm_bindgen (extends = Object)]
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub type EvaluationDetails<T>;
     #[wasm_bindgen(method, getter, js_name = "flagKey")]
     pub fn flag_key<T>(this: &EvaluationDetails<T>) -> String;
+    #[wasm_bindgen(method, getter, js_name = "flagKey")]
+    pub fn flag_key_js_string<T>(this: &EvaluationDetails<T>) -> JsString;
     #[wasm_bindgen(method, setter, js_name = "flagKey")]
-    pub fn set_flag_key<T>(this: &EvaluationDetails<T>, val: &str);
+    pub fn set_flag_key<T, S: ::wasm_bindgen::JsStringLike>(this: &EvaluationDetails<T>, val: S);
     #[wasm_bindgen(method, getter)]
     pub fn value<T>(this: &EvaluationDetails<T>) -> T;
     #[wasm_bindgen(method, setter)]
     pub fn set_value<T>(this: &EvaluationDetails<T>, val: T);
     #[wasm_bindgen(method, getter)]
     pub fn variant<T>(this: &EvaluationDetails<T>) -> Option<String>;
+    #[wasm_bindgen(method, getter, js_name = "variant")]
+    pub fn variant_js_string<T>(this: &EvaluationDetails<T>) -> Option<JsString>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_variant<T>(this: &EvaluationDetails<T>, val: &str);
+    pub fn set_variant<T, S: ::wasm_bindgen::JsStringLike>(this: &EvaluationDetails<T>, val: S);
 }
 impl<T: ::wasm_bindgen::convert::IntoWasmAbi> EvaluationDetails<T> {
-    pub fn new(flag_key: &str, value: T) -> EvaluationDetails<T> {
+    pub fn new<S: ::wasm_bindgen::JsStringLike>(flag_key: S, value: T) -> EvaluationDetails<T> {
         Self::builder(flag_key, value).build()
     }
-    pub fn builder(flag_key: &str, value: T) -> EvaluationDetailsBuilder<T> {
+    pub fn builder<S: ::wasm_bindgen::JsStringLike>(
+        flag_key: S,
+        value: T,
+    ) -> EvaluationDetailsBuilder<T> {
         let inner: EvaluationDetails<T> = JsCast::unchecked_into(js_sys::Object::new());
         inner.set_flag_key(flag_key);
         inner.set_value(value);
@@ -62,11 +69,168 @@ pub struct EvaluationDetailsBuilder<T: ::wasm_bindgen::convert::IntoWasmAbi> {
     inner: EvaluationDetails<T>,
 }
 impl<T: ::wasm_bindgen::convert::IntoWasmAbi> EvaluationDetailsBuilder<T> {
-    pub fn variant(self, val: &str) -> Self {
+    pub fn variant<S: ::wasm_bindgen::JsStringLike>(self, val: S) -> Self {
         self.inner.set_variant(val);
         self
     }
     pub fn build(self) -> EvaluationDetails<T> {
         self.inner
     }
+}
+#[wasm_bindgen(module = "generic-mono", experimental_generic_mono)]
+extern "C" {
+    # [wasm_bindgen (extends = Object)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub type Pair<A, B>;
+    #[wasm_bindgen(method, getter)]
+    pub fn first<A, B>(this: &Pair<A, B>) -> A;
+    #[wasm_bindgen(method, setter)]
+    pub fn set_first<A, B>(this: &Pair<A, B>, val: A);
+    #[wasm_bindgen(method, getter)]
+    pub fn second<A, B>(this: &Pair<A, B>) -> B;
+    #[wasm_bindgen(method, setter)]
+    pub fn set_second<A, B>(this: &Pair<A, B>, val: B);
+}
+impl<A: ::wasm_bindgen::convert::IntoWasmAbi, B: ::wasm_bindgen::convert::IntoWasmAbi> Pair<A, B> {
+    pub fn new(first: A, second: B) -> Pair<A, B> {
+        let inner: Pair<A, B> = JsCast::unchecked_into(js_sys::Object::new());
+        inner.set_first(first);
+        inner.set_second(second);
+        inner
+    }
+}
+#[wasm_bindgen(module = "generic-mono", experimental_generic_mono)]
+extern "C" {
+    # [wasm_bindgen (extends = Object)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub type Flags;
+    #[wasm_bindgen(method, catch, js_name = "getStringValue")]
+    pub async fn get_string_value<S: ::wasm_bindgen::JsStringLike>(
+        this: &Flags,
+        default_value: S,
+    ) -> Result<String, JsValue>;
+    #[wasm_bindgen(method, catch, js_name = "getStringValue")]
+    pub async fn get_string_value_js_string<S: ::wasm_bindgen::JsStringLike>(
+        this: &Flags,
+        default_value: S,
+    ) -> Result<JsString, JsValue>;
+    #[wasm_bindgen(method, catch, js_name = "getStringDetails")]
+    pub async fn get_string_details<S: ::wasm_bindgen::JsStringLike>(
+        this: &Flags,
+        default_value: S,
+    ) -> Result<EvaluationDetails<String>, JsValue>;
+    #[wasm_bindgen(method, catch, js_name = "getStringDetails")]
+    pub async fn get_string_details_js_string<S: ::wasm_bindgen::JsStringLike>(
+        this: &Flags,
+        default_value: S,
+    ) -> Result<EvaluationDetails<JsString>, JsValue>;
+    #[wasm_bindgen(method, catch, js_name = "getBooleanDetails")]
+    pub async fn get_boolean_details(
+        this: &Flags,
+        default_value: bool,
+    ) -> Result<EvaluationDetails<bool>, JsValue>;
+    #[wasm_bindgen(method, catch, js_name = "getNumberDetails")]
+    pub async fn get_number_details(
+        this: &Flags,
+        default_value: f64,
+    ) -> Result<EvaluationDetails<f64>, JsValue>;
+    #[wasm_bindgen(method, catch, js_name = "getNullableString")]
+    pub async fn get_nullable_string<S: ::wasm_bindgen::JsStringLike>(
+        this: &Flags,
+        default_value: S,
+    ) -> Result<Option<String>, JsValue>;
+    #[wasm_bindgen(method, catch, js_name = "getNullableString")]
+    pub async fn get_nullable_string_js_string<S: ::wasm_bindgen::JsStringLike>(
+        this: &Flags,
+        default_value: S,
+    ) -> Result<Option<JsString>, JsValue>;
+    #[wasm_bindgen(method, catch, js_name = "getStringPair")]
+    pub async fn get_string_pair<S: ::wasm_bindgen::JsStringLike>(
+        this: &Flags,
+        default_value: S,
+    ) -> Result<Pair<String, String>, JsValue>;
+    #[wasm_bindgen(method, catch, js_name = "getStringPair")]
+    pub async fn get_string_pair_js_string<S: ::wasm_bindgen::JsStringLike>(
+        this: &Flags,
+        default_value: S,
+    ) -> Result<Pair<JsString, JsString>, JsValue>;
+    #[wasm_bindgen(method, catch, js_name = "getStringArray")]
+    pub async fn get_string_array(this: &Flags) -> Result<Array<JsString>, JsValue>;
+    #[wasm_bindgen(method, catch, js_name = "getStringMap")]
+    pub async fn get_string_map(this: &Flags) -> Result<Map<JsString, JsString>, JsValue>;
+    #[wasm_bindgen(method, catch, js_name = "getStringTuple")]
+    pub async fn get_string_tuple(
+        this: &Flags,
+    ) -> Result<ArrayTuple<(JsString, JsString)>, JsValue>;
+    #[wasm_bindgen(method, catch, js_name = "getStringCallback")]
+    pub async fn get_string_callback(
+        this: &Flags,
+    ) -> Result<Function<fn(JsString) -> JsString>, JsValue>;
+    #[wasm_bindgen(method, js_name = "compareStrings")]
+    pub fn compare_strings<S: ::wasm_bindgen::JsStringLike, S2: ::wasm_bindgen::JsStringLike>(
+        this: &Flags,
+        left: S,
+        right: S2,
+    ) -> bool;
+    #[wasm_bindgen(method, catch, js_name = "compareStrings")]
+    pub fn try_compare_strings<S: ::wasm_bindgen::JsStringLike, S2: ::wasm_bindgen::JsStringLike>(
+        this: &Flags,
+        left: S,
+        right: S2,
+    ) -> Result<bool, JsValue>;
+}
+#[wasm_bindgen(module = "generic-mono", experimental_generic_mono)]
+extern "C" {
+    #[doc = " ## Errors"]
+    #[doc = ""]
+    #[doc = " * `TypeError`"]
+    #[wasm_bindgen(js_name = "parseString")]
+    pub fn parse_string<S: ::wasm_bindgen::JsStringLike>(value: S) -> String;
+}
+#[wasm_bindgen(module = "generic-mono", experimental_generic_mono)]
+extern "C" {
+    #[doc = " ## Errors"]
+    #[doc = ""]
+    #[doc = " * `TypeError`"]
+    #[wasm_bindgen(js_name = "parseString")]
+    pub fn parse_string_js_string<S: ::wasm_bindgen::JsStringLike>(value: S) -> JsString;
+}
+#[wasm_bindgen(module = "generic-mono", experimental_generic_mono)]
+extern "C" {
+    #[doc = " ## Errors"]
+    #[doc = ""]
+    #[doc = " * `TypeError`"]
+    #[wasm_bindgen(catch, js_name = "parseString")]
+    pub fn try_parse_string<S: ::wasm_bindgen::JsStringLike>(value: S)
+        -> Result<String, TypeError>;
+}
+#[wasm_bindgen(module = "generic-mono", experimental_generic_mono)]
+extern "C" {
+    #[doc = " ## Errors"]
+    #[doc = ""]
+    #[doc = " * `TypeError`"]
+    #[wasm_bindgen(catch, js_name = "parseString")]
+    pub fn try_parse_string_js_string<S: ::wasm_bindgen::JsStringLike>(
+        value: S,
+    ) -> Result<JsString, TypeError>;
+}
+#[wasm_bindgen(module = "generic-mono", experimental_generic_mono)]
+extern "C" {
+    #[wasm_bindgen(js_name = "roundtripBoolean")]
+    pub fn roundtrip_boolean(value: bool) -> bool;
+}
+#[wasm_bindgen(module = "generic-mono", experimental_generic_mono)]
+extern "C" {
+    #[wasm_bindgen(catch, js_name = "roundtripBoolean")]
+    pub fn try_roundtrip_boolean(value: bool) -> Result<bool, JsValue>;
+}
+#[wasm_bindgen(module = "generic-mono", experimental_generic_mono)]
+extern "C" {
+    #[wasm_bindgen(js_name = "roundtripNumber")]
+    pub fn roundtrip_number(value: f64) -> f64;
+}
+#[wasm_bindgen(module = "generic-mono", experimental_generic_mono)]
+extern "C" {
+    #[wasm_bindgen(catch, js_name = "roundtripNumber")]
+    pub fn try_roundtrip_number(value: f64) -> Result<f64, JsValue>;
 }

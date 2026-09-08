@@ -485,7 +485,7 @@ pub fn build_signatures(
     let augmented_doc = spec.doc.clone();
 
     let allow_try = !is_async && !nothrow && spec.kind.allows_try_variant();
-    let mut out = Vec::with_capacity(expansions.len() * if allow_try { 2 } else { 1 });
+    let mut out = Vec::with_capacity(expansions.len() * if allow_try { 4 } else { 2 });
 
     for exp in expansions {
         let primary_candidate = public_rust_name(&format!("{base}{}", exp.name_suffix));
@@ -495,7 +495,7 @@ pub fn build_signatures(
         // * the kind always catches (constructors), OR
         // * it's async — *unless* `Throws::Never` opts out.
         let primary_catches = spec.kind.always_catches() || (is_async && !nothrow);
-        out.push(FunctionSignature {
+        let primary = FunctionSignature {
             rust_name: primary_name.clone(),
             js_name: spec.js_name.to_string(),
             params: exp.params.clone(),
@@ -509,11 +509,12 @@ pub fn build_signatures(
             },
             doc: augmented_doc.clone(),
             body_scope: spec.body_scope,
-        });
+        };
+        push_with_js_string_return(&mut out, primary, used_names, cgctx);
 
         if allow_try {
             let try_name = dedupe_name(&format!("try_{primary_name}"), used_names);
-            out.push(FunctionSignature {
+            let try_sig = FunctionSignature {
                 rust_name: try_name,
                 js_name: spec.js_name.to_string(),
                 params: exp.params,
@@ -523,11 +524,70 @@ pub fn build_signatures(
                 error_type: error_type.cloned(),
                 doc: augmented_doc.clone(),
                 body_scope: spec.body_scope,
-            });
+            };
+            push_with_js_string_return(&mut out, try_sig, used_names, cgctx);
         }
     }
 
     out
+}
+
+fn push_with_js_string_return(
+    out: &mut Vec<FunctionSignature>,
+    sig: FunctionSignature,
+    used_names: &mut HashSet<String>,
+    cgctx: Option<&CodegenContext<'_>>,
+) {
+    let js_return = cgctx
+        .filter(|ctx| ctx.experimental_generic_mono)
+        .and_then(|ctx| js_string_return_type(&sig.return_type, ctx));
+    out.push(sig.clone());
+    if let Some(return_type) = js_return {
+        let mut js_sig = sig;
+        js_sig.rust_name = dedupe_name(&format!("{}_js_string", js_sig.rust_name), used_names);
+        js_sig.return_type = return_type;
+        out.push(js_sig);
+    }
+}
+
+/// Replace every eligible string leaf in a return type with `JsString`.
+/// Traversal enters locally declared generic types and nullable wrappers, but
+/// intentionally stops at built-in JS containers, callbacks, and tuples.
+pub fn js_string_return_type(ty: &TypeRef, cgctx: &CodegenContext<'_>) -> Option<TypeRef> {
+    match ty {
+        TypeRef::String | TypeRef::StringLiteral(_) => Some(TypeRef::ident("JsString")),
+        TypeRef::Nullable(inner) => {
+            js_string_return_type(inner, cgctx).map(|inner| TypeRef::Nullable(Box::new(inner)))
+        }
+        TypeRef::Reference {
+            segments,
+            generic_args,
+        } if segments.len() == 1
+            && !generic_args.is_empty()
+            && cgctx
+                .local_type_param_counts
+                .get(&segments[0])
+                .is_some_and(|count| *count > 0) =>
+        {
+            let mut changed = false;
+            let args = generic_args
+                .iter()
+                .map(|arg| {
+                    if let Some(replacement) = js_string_return_type(arg, cgctx) {
+                        changed = true;
+                        replacement
+                    } else {
+                        arg.clone()
+                    }
+                })
+                .collect();
+            changed.then(|| TypeRef::Reference {
+                segments: segments.clone(),
+                generic_args: args,
+            })
+        }
+        _ => None,
+    }
 }
 
 /// Compute `_with_X` / `_with_X_and_Y` suffixes across a cohort of expanded
@@ -1229,6 +1289,88 @@ pub fn generate_concrete_params(
     quote! { #(#items),* }
 }
 
+/// Convert parameters while making each direct string position an inferred
+/// `JsStringLike` generic in per-monomorphization mode. The returned bounds
+/// must be merged with the callable's other generic parameters.
+pub fn generate_concrete_params_with_mono_strings(
+    params: &[ConcreteParam],
+    cgctx: Option<&CodegenContext<'_>>,
+    scope: ScopeId,
+    from_module: &crate::ir::ModuleContext,
+) -> (Vec<TokenStream>, TokenStream) {
+    let per_mono = cgctx.is_some_and(|ctx| ctx.experimental_generic_mono);
+    if !per_mono {
+        return (
+            Vec::new(),
+            generate_concrete_params(params, cgctx, scope, from_module),
+        );
+    }
+
+    let mut bounds = Vec::new();
+    let mut used_names = Vec::new();
+    let items = params
+        .iter()
+        .map(|param| {
+            let name = typemap::make_ident(&param.name);
+            let ty = if param.variadic {
+                quote! { &[JsValue] }
+            } else if mono_string_argument_shape(&param.type_ref) {
+                let ident = fresh_string_generic(cgctx.unwrap(), scope, &used_names);
+                used_names.push(ident.to_string());
+                bounds.push(quote! { #ident: ::wasm_bindgen::JsStringLike });
+                if matches!(param.type_ref, TypeRef::Nullable(_)) {
+                    quote! { Option<#ident> }
+                } else {
+                    quote! { #ident }
+                }
+            } else {
+                typemap::to_syn_type(
+                    &param.type_ref,
+                    TypePosition::ARGUMENT,
+                    cgctx,
+                    scope,
+                    from_module,
+                )
+            };
+            quote! { #name: #ty }
+        })
+        .collect::<Vec<_>>();
+
+    (bounds, quote! { #(#items),* })
+}
+
+fn mono_string_argument_shape(ty: &TypeRef) -> bool {
+    match ty {
+        TypeRef::String | TypeRef::StringLiteral(_) => true,
+        TypeRef::Nullable(inner) => {
+            matches!(inner.as_ref(), TypeRef::String | TypeRef::StringLiteral(_))
+        }
+        _ => false,
+    }
+}
+
+fn fresh_string_generic(
+    cgctx: &CodegenContext<'_>,
+    scope: ScopeId,
+    used_names: &[String],
+) -> syn::Ident {
+    for index in 1_u32.. {
+        let candidate = if index == 1 {
+            "S".to_string()
+        } else {
+            format!("S{index}")
+        };
+        let conflicts_with_type_param = matches!(
+            cgctx.gctx.scopes.resolve_binding(scope, &candidate),
+            Some(crate::parse::scope::Binding::TypeParam),
+        );
+        if !conflicts_with_type_param && !used_names.contains(&candidate) {
+            return typemap::make_ident(&candidate);
+        }
+    }
+    unreachable!("an unused string generic name always exists")
+}
+
 /// Convert dictionary factory params to a `(bounds, params)` token-stream pair.
 ///
 /// `ArrayBufferView` switches the helper into a generic signature
@@ -1248,6 +1390,7 @@ pub fn generate_dictionary_params(
     from_module: &crate::ir::ModuleContext,
 ) -> (Vec<TokenStream>, TokenStream) {
     let mut generic_idents: Vec<syn::Ident> = Vec::new();
+    let mut string_idents: Vec<syn::Ident> = Vec::new();
     let items: Vec<_> = params
         .iter()
         .map(|p| {
@@ -1261,6 +1404,20 @@ pub fn generate_dictionary_params(
                 );
                 generic_idents.push(g.clone());
                 quote! { &#g }
+            } else if cgctx.is_some_and(|ctx| ctx.experimental_generic_mono)
+                && mono_string_argument_shape(&p.type_ref)
+            {
+                let used = string_idents
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>();
+                let ident = fresh_string_generic(cgctx.unwrap(), scope, &used);
+                string_idents.push(ident.clone());
+                if matches!(p.type_ref, TypeRef::Nullable(_)) {
+                    quote! { Option<#ident> }
+                } else {
+                    quote! { #ident }
+                }
             } else {
                 typemap::to_syn_type(
                     &p.type_ref,
@@ -1274,10 +1431,16 @@ pub fn generate_dictionary_params(
         })
         .collect();
 
-    let bounds: Vec<TokenStream> = generic_idents
+    let mut bounds = string_idents
         .iter()
-        .map(|g| quote! { #g: ::js_sys::TypedArray })
-        .collect();
+        .map(|ident| quote! { #ident: ::wasm_bindgen::JsStringLike })
+        .collect::<Vec<_>>();
+    bounds.extend(
+        generic_idents
+            .iter()
+            .map(|g| quote! { #g: ::js_sys::TypedArray })
+            .collect::<Vec<_>>(),
+    );
 
     (bounds, quote! { #(#items),* })
 }
