@@ -4,12 +4,26 @@ use js_sys::{Array, ArrayTuple, Function, JsString, Map, Uint8Array};
 use wasm_bindgen::JsValue;
 
 use ts_gen_integration_tests::generic_mono::{
-    parse_string, parse_string_js_string, roundtrip_boolean, roundtrip_number, try_parse_string,
-    try_parse_string_js_string, EvaluationDetails, Flags, Pair, TypedArrayOptions,
+    identity, parse_string, parse_string_js_string, roundtrip_boolean, roundtrip_number,
+    try_parse_string, try_parse_string_js_string, EvaluationDetails, Flags, Holder, Pair,
+    TypedArrayOptions,
 };
 
+// This fixture has no backing JavaScript module, so it provides compile-only
+// signature coverage rather than runtime `wasm_bindgen_test` cases.
 #[allow(dead_code)]
 async fn generic_mono_signatures_compile(flags: &Flags, js_string: &JsString) {
+    let holder: Holder<f64> = Holder::new(1.0).unwrap();
+    let _: f64 = holder.get();
+    holder.set(2.0);
+    let holder: Holder<String> = Holder::new(String::from("value")).unwrap();
+    let _: String = holder.get();
+
+    let _: f64 = identity(1.0);
+    let _: JsString = identity(js_string.clone());
+    let _: JsValue = identity(JsValue::NULL);
+    let _: Pair<f64, bool> = Pair::new(1.0, true);
+
     let _: Result<String, JsValue> = flags.get_string_value("borrowed").await;
     let _: Result<String, JsValue> = flags.get_string_value(String::from("owned")).await;
     let _: Result<String, JsValue> = flags.get_string_value(js_string).await;
