@@ -84,8 +84,7 @@ fn generate_expanded_free_function(
     // directly so `T` references lower to a bare ident.
     let scope = sig.body_scope;
     let rust_ident = super::typemap::make_ident(&sig.rust_name);
-    let (string_bounds, params) =
-        generate_concrete_params_with_mono_strings(&sig.params, cgctx, scope, ctx);
+    let params = generate_concrete_params_with_mono_strings(&sig.params, cgctx, scope, ctx);
     let ret_ty = to_return_type(
         &sig.return_type,
         sig.catch,
@@ -149,9 +148,7 @@ fn generate_expanded_free_function(
     };
     let wb_extern_attr = CodegenContext::extern_attr(cgctx, module);
 
-    let mut bounds = generic_bounds_for_function(sig, cgctx);
-    bounds.extend(string_bounds);
-    let generics = render_generic_bounds(&bounds);
+    let generics = render_generic_bounds(&generic_bounds_for_function(sig, cgctx));
 
     quote! {
         #wb_extern_attr

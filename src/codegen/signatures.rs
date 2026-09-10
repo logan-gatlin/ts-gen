@@ -1264,35 +1264,25 @@ pub fn generate_concrete_params(
 }
 
 /// Convert parameters while making each direct string position an inferred
-/// `JsStringLike` generic in per-monomorphization mode. The returned bounds
-/// must be merged with the callable's other generic parameters.
+/// `impl JsStringLike` in per-monomorphization mode.
 pub fn generate_concrete_params_with_mono_strings(
     params: &[ConcreteParam],
     cgctx: Option<&CodegenContext<'_>>,
     scope: ScopeId,
     from_module: &crate::ir::ModuleContext,
-) -> (Vec<TokenStream>, TokenStream) {
+) -> TokenStream {
     let per_mono = cgctx.is_some_and(|ctx| ctx.experimental_generic_mono);
     if !per_mono {
-        return (
-            Vec::new(),
-            generate_concrete_params(params, cgctx, scope, from_module),
-        );
+        return generate_concrete_params(params, cgctx, scope, from_module);
     }
 
-    let mut bounds = Vec::new();
-    let mut used_names = Vec::new();
     let items = params
         .iter()
         .map(|param| {
             let name = typemap::make_ident(&param.name);
             let ty = if param.variadic {
                 quote! { &[JsValue] }
-            } else if mono_string_argument_shape(&param.type_ref) {
-                let (ident, ty) =
-                    mono_string_generic(cgctx.unwrap(), scope, &used_names, &param.type_ref);
-                used_names.push(ident.to_string());
-                bounds.push(quote! { #ident: ::wasm_bindgen::JsStringLike });
+            } else if let Some(ty) = mono_string_argument_type(&param.type_ref) {
                 ty
             } else {
                 typemap::to_syn_type(
@@ -1307,55 +1297,21 @@ pub fn generate_concrete_params_with_mono_strings(
         })
         .collect::<Vec<_>>();
 
-    (bounds, quote! { #(#items),* })
+    quote! { #(#items),* }
 }
 
-fn mono_string_argument_shape(ty: &TypeRef) -> bool {
+fn mono_string_argument_type(ty: &TypeRef) -> Option<TokenStream> {
     match ty {
-        TypeRef::String | TypeRef::StringLiteral(_) => true,
-        TypeRef::Nullable(inner) => {
-            matches!(inner.as_ref(), TypeRef::String | TypeRef::StringLiteral(_))
+        TypeRef::String | TypeRef::StringLiteral(_) => {
+            Some(quote! { impl ::wasm_bindgen::JsStringLike })
         }
-        _ => false,
-    }
-}
-
-fn fresh_string_generic(
-    cgctx: &CodegenContext<'_>,
-    scope: ScopeId,
-    used_names: &[String],
-) -> syn::Ident {
-    for index in 1_u32.. {
-        let candidate = if index == 1 {
-            "S".to_string()
-        } else {
-            format!("S{index}")
-        };
-        let conflicts_with_binding = cgctx
-            .gctx
-            .scopes
-            .resolve_binding(scope, &candidate)
-            .is_some();
-        if !conflicts_with_binding && !used_names.contains(&candidate) {
-            return typemap::make_ident(&candidate);
+        TypeRef::Nullable(inner)
+            if matches!(inner.as_ref(), TypeRef::String | TypeRef::StringLiteral(_)) =>
+        {
+            Some(quote! { Option<impl ::wasm_bindgen::JsStringLike> })
         }
+        _ => None,
     }
-    unreachable!("an unused string generic name always exists")
-}
-
-fn mono_string_generic(
-    cgctx: &CodegenContext<'_>,
-    scope: ScopeId,
-    used_names: &[String],
-    ty: &TypeRef,
-) -> (syn::Ident, TokenStream) {
-    let ident = fresh_string_generic(cgctx, scope, used_names);
-    let ty = if matches!(ty, TypeRef::Nullable(_)) {
-        quote! { Option<#ident> }
-    } else {
-        quote! { #ident }
-    };
-    (ident, ty)
 }
 
 /// Convert dictionary factory params to a `(bounds, params)` token-stream pair.
@@ -1382,7 +1338,6 @@ pub fn generate_dictionary_params(
     from_module: &crate::ir::ModuleContext,
 ) -> (Vec<TokenStream>, TokenStream, TokenStream) {
     let mut generic_idents: Vec<syn::Ident> = Vec::new();
-    let mut string_idents: Vec<syn::Ident> = Vec::new();
     let items: Vec<_> = params
         .iter()
         .map(|p| {
@@ -1396,15 +1351,10 @@ pub fn generate_dictionary_params(
                 );
                 generic_idents.push(g.clone());
                 quote! { &#g }
-            } else if cgctx.is_some_and(|ctx| ctx.experimental_generic_mono)
-                && mono_string_argument_shape(&p.type_ref)
+            } else if let Some(ty) = cgctx
+                .filter(|ctx| ctx.experimental_generic_mono)
+                .and_then(|_| mono_string_argument_type(&p.type_ref))
             {
-                let used = string_idents
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>();
-                let (ident, ty) = mono_string_generic(cgctx.unwrap(), scope, &used, &p.type_ref);
-                string_idents.push(ident.clone());
                 ty
             } else {
                 typemap::to_syn_type(
@@ -1419,16 +1369,10 @@ pub fn generate_dictionary_params(
         })
         .collect();
 
-    let mut bounds = string_idents
+    let bounds = generic_idents
         .iter()
-        .map(|ident| quote! { #ident: ::wasm_bindgen::JsStringLike })
+        .map(|g| quote! { #g: ::js_sys::TypedArray })
         .collect::<Vec<_>>();
-    bounds.extend(
-        generic_idents
-            .iter()
-            .map(|g| quote! { #g: ::js_sys::TypedArray })
-            .collect::<Vec<_>>(),
-    );
 
     // This must mirror wasm-bindgen's macro-generated import-shim bound: the
     // ordinary Rust dictionary helper calls that shim with `&T` directly.
@@ -1484,6 +1428,23 @@ mod tests {
 
     fn no_used() -> HashSet<String> {
         HashSet::new()
+    }
+
+    #[test]
+    fn mono_strings_use_anonymous_impl_trait() {
+        assert_eq!(
+            mono_string_argument_type(&TypeRef::String)
+                .unwrap()
+                .to_string(),
+            "impl :: wasm_bindgen :: JsStringLike"
+        );
+        assert_eq!(
+            mono_string_argument_type(&TypeRef::Nullable(Box::new(TypeRef::String)))
+                .unwrap()
+                .to_string(),
+            "Option < impl :: wasm_bindgen :: JsStringLike >"
+        );
+        assert!(mono_string_argument_type(&TypeRef::Number).is_none());
     }
 
     /// Create a GlobalContext + scope + CodegenContext for tests.

@@ -39,7 +39,7 @@ extern "C" {
     #[wasm_bindgen(method, getter, js_name = "flagKey")]
     pub fn flag_key_js_string<T>(this: &EvaluationDetails<T>) -> JsString;
     #[wasm_bindgen(method, setter, js_name = "flagKey")]
-    pub fn set_flag_key<T, S: ::wasm_bindgen::JsStringLike>(this: &EvaluationDetails<T>, val: S);
+    pub fn set_flag_key<T>(this: &EvaluationDetails<T>, val: impl ::wasm_bindgen::JsStringLike);
     #[wasm_bindgen(method, getter)]
     pub fn value<T>(this: &EvaluationDetails<T>) -> T;
     #[wasm_bindgen(method, setter)]
@@ -49,14 +49,14 @@ extern "C" {
     #[wasm_bindgen(method, getter, js_name = "variant")]
     pub fn variant_js_string<T>(this: &EvaluationDetails<T>) -> Option<JsString>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_variant<T, S: ::wasm_bindgen::JsStringLike>(this: &EvaluationDetails<T>, val: S);
+    pub fn set_variant<T>(this: &EvaluationDetails<T>, val: impl ::wasm_bindgen::JsStringLike);
 }
 impl<T: ::wasm_bindgen::convert::IntoWasmAbi> EvaluationDetails<T> {
-    pub fn new<S: ::wasm_bindgen::JsStringLike>(flag_key: S, value: T) -> EvaluationDetails<T> {
+    pub fn new(flag_key: impl ::wasm_bindgen::JsStringLike, value: T) -> EvaluationDetails<T> {
         Self::builder(flag_key, value).build()
     }
-    pub fn builder<S: ::wasm_bindgen::JsStringLike>(
-        flag_key: S,
+    pub fn builder(
+        flag_key: impl ::wasm_bindgen::JsStringLike,
         value: T,
     ) -> EvaluationDetailsBuilder<T> {
         let inner: EvaluationDetails<T> = JsCast::unchecked_into(js_sys::Object::new());
@@ -69,7 +69,7 @@ pub struct EvaluationDetailsBuilder<T> {
     inner: EvaluationDetails<T>,
 }
 impl<T: ::wasm_bindgen::convert::IntoWasmAbi> EvaluationDetailsBuilder<T> {
-    pub fn variant<S: ::wasm_bindgen::JsStringLike>(self, val: S) -> Self {
+    pub fn variant(self, val: impl ::wasm_bindgen::JsStringLike) -> Self {
         self.inner.set_variant(val);
         self
     }
@@ -125,24 +125,24 @@ extern "C" {
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub type Flags;
     #[wasm_bindgen(method, catch, js_name = "getStringValue")]
-    pub async fn get_string_value<S: ::wasm_bindgen::JsStringLike>(
+    pub async fn get_string_value(
         this: &Flags,
-        default_value: S,
+        default_value: impl ::wasm_bindgen::JsStringLike,
     ) -> Result<String, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "getStringValue")]
-    pub async fn get_string_value_js_string<S: ::wasm_bindgen::JsStringLike>(
+    pub async fn get_string_value_js_string(
         this: &Flags,
-        default_value: S,
+        default_value: impl ::wasm_bindgen::JsStringLike,
     ) -> Result<JsString, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "getStringDetails")]
-    pub async fn get_string_details<S: ::wasm_bindgen::JsStringLike>(
+    pub async fn get_string_details(
         this: &Flags,
-        default_value: S,
+        default_value: impl ::wasm_bindgen::JsStringLike,
     ) -> Result<EvaluationDetails<String>, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "getStringDetails")]
-    pub async fn get_string_details_js_string<S: ::wasm_bindgen::JsStringLike>(
+    pub async fn get_string_details_js_string(
         this: &Flags,
-        default_value: S,
+        default_value: impl ::wasm_bindgen::JsStringLike,
     ) -> Result<EvaluationDetails<JsString>, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "getBooleanDetails")]
     pub async fn get_boolean_details(
@@ -155,24 +155,24 @@ extern "C" {
         default_value: f64,
     ) -> Result<EvaluationDetails<f64>, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "getNullableString")]
-    pub async fn get_nullable_string<S: ::wasm_bindgen::JsStringLike>(
+    pub async fn get_nullable_string(
         this: &Flags,
-        default_value: S,
+        default_value: impl ::wasm_bindgen::JsStringLike,
     ) -> Result<Option<String>, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "getNullableString")]
-    pub async fn get_nullable_string_js_string<S: ::wasm_bindgen::JsStringLike>(
+    pub async fn get_nullable_string_js_string(
         this: &Flags,
-        default_value: S,
+        default_value: impl ::wasm_bindgen::JsStringLike,
     ) -> Result<Option<JsString>, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "getStringPair")]
-    pub async fn get_string_pair<S: ::wasm_bindgen::JsStringLike>(
+    pub async fn get_string_pair(
         this: &Flags,
-        default_value: S,
+        default_value: impl ::wasm_bindgen::JsStringLike,
     ) -> Result<Pair<String, String>, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "getStringPair")]
-    pub async fn get_string_pair_js_string<S: ::wasm_bindgen::JsStringLike>(
+    pub async fn get_string_pair_js_string(
         this: &Flags,
-        default_value: S,
+        default_value: impl ::wasm_bindgen::JsStringLike,
     ) -> Result<Pair<JsString, JsString>, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "getStringArray")]
     pub async fn get_string_array(this: &Flags) -> Result<Array<JsString>, JsValue>;
@@ -187,16 +187,16 @@ extern "C" {
         this: &Flags,
     ) -> Result<Function<fn(JsString) -> JsString>, JsValue>;
     #[wasm_bindgen(method, js_name = "compareStrings")]
-    pub fn compare_strings<S: ::wasm_bindgen::JsStringLike, S2: ::wasm_bindgen::JsStringLike>(
+    pub fn compare_strings(
         this: &Flags,
-        left: S,
-        right: S2,
+        left: impl ::wasm_bindgen::JsStringLike,
+        right: impl ::wasm_bindgen::JsStringLike,
     ) -> bool;
     #[wasm_bindgen(method, catch, js_name = "compareStrings")]
-    pub fn try_compare_strings<S: ::wasm_bindgen::JsStringLike, S2: ::wasm_bindgen::JsStringLike>(
+    pub fn try_compare_strings(
         this: &Flags,
-        left: S,
-        right: S2,
+        left: impl ::wasm_bindgen::JsStringLike,
+        right: impl ::wasm_bindgen::JsStringLike,
     ) -> Result<bool, JsValue>;
 }
 #[wasm_bindgen(module = "generic-mono", experimental_generic_mono)]
@@ -205,7 +205,7 @@ extern "C" {
     #[doc = ""]
     #[doc = " * `TypeError`"]
     #[wasm_bindgen(js_name = "parseString")]
-    pub fn parse_string<S: ::wasm_bindgen::JsStringLike>(value: S) -> String;
+    pub fn parse_string(value: impl ::wasm_bindgen::JsStringLike) -> String;
 }
 #[wasm_bindgen(module = "generic-mono", experimental_generic_mono)]
 extern "C" {
@@ -213,7 +213,7 @@ extern "C" {
     #[doc = ""]
     #[doc = " * `TypeError`"]
     #[wasm_bindgen(js_name = "parseString")]
-    pub fn parse_string_js_string<S: ::wasm_bindgen::JsStringLike>(value: S) -> JsString;
+    pub fn parse_string_js_string(value: impl ::wasm_bindgen::JsStringLike) -> JsString;
 }
 #[wasm_bindgen(module = "generic-mono", experimental_generic_mono)]
 extern "C" {
@@ -221,8 +221,7 @@ extern "C" {
     #[doc = ""]
     #[doc = " * `TypeError`"]
     #[wasm_bindgen(catch, js_name = "parseString")]
-    pub fn try_parse_string<S: ::wasm_bindgen::JsStringLike>(value: S)
-        -> Result<String, TypeError>;
+    pub fn try_parse_string(value: impl ::wasm_bindgen::JsStringLike) -> Result<String, TypeError>;
 }
 #[wasm_bindgen(module = "generic-mono", experimental_generic_mono)]
 extern "C" {
@@ -230,8 +229,8 @@ extern "C" {
     #[doc = ""]
     #[doc = " * `TypeError`"]
     #[wasm_bindgen(catch, js_name = "parseString")]
-    pub fn try_parse_string_js_string<S: ::wasm_bindgen::JsStringLike>(
-        value: S,
+    pub fn try_parse_string_js_string(
+        value: impl ::wasm_bindgen::JsStringLike,
     ) -> Result<JsString, TypeError>;
 }
 #[wasm_bindgen(module = "generic-mono", experimental_generic_mono)]

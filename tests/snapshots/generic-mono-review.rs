@@ -25,50 +25,48 @@ extern "C" {
 #[wasm_bindgen(module = "generic-mono-review", experimental_generic_mono)]
 extern "C" {
     #[wasm_bindgen(js_name = "byAlias")]
-    pub fn by_alias<S3: ::wasm_bindgen::JsStringLike>(id: S3) -> String;
+    pub fn by_alias(id: impl ::wasm_bindgen::JsStringLike) -> String;
 }
 #[wasm_bindgen(module = "generic-mono-review", experimental_generic_mono)]
 extern "C" {
     #[wasm_bindgen(js_name = "byAlias")]
-    pub fn by_alias_js_string<S3: ::wasm_bindgen::JsStringLike>(id: S3) -> JsString;
+    pub fn by_alias_js_string(id: impl ::wasm_bindgen::JsStringLike) -> JsString;
 }
 #[wasm_bindgen(module = "generic-mono-review", experimental_generic_mono)]
 extern "C" {
     #[wasm_bindgen(catch, js_name = "byAlias")]
-    pub fn try_by_alias<S3: ::wasm_bindgen::JsStringLike>(id: S3) -> Result<String, JsValue>;
+    pub fn try_by_alias(id: impl ::wasm_bindgen::JsStringLike) -> Result<String, JsValue>;
 }
 #[wasm_bindgen(module = "generic-mono-review", experimental_generic_mono)]
 extern "C" {
     #[wasm_bindgen(catch, js_name = "byAlias")]
-    pub fn try_by_alias_js_string<S3: ::wasm_bindgen::JsStringLike>(
-        id: S3,
+    pub fn try_by_alias_js_string(
+        id: impl ::wasm_bindgen::JsStringLike,
     ) -> Result<JsString, JsValue>;
 }
 #[wasm_bindgen(module = "generic-mono-review", experimental_generic_mono)]
 extern "C" {
     #[wasm_bindgen(catch, js_name = "asyncByAlias")]
-    pub async fn async_by_alias<S3: ::wasm_bindgen::JsStringLike>(
-        id: S3,
-    ) -> Result<String, JsValue>;
+    pub async fn async_by_alias(id: impl ::wasm_bindgen::JsStringLike) -> Result<String, JsValue>;
 }
 #[wasm_bindgen(module = "generic-mono-review", experimental_generic_mono)]
 extern "C" {
     #[wasm_bindgen(catch, js_name = "asyncByAlias")]
-    pub async fn async_by_alias_js_string<S3: ::wasm_bindgen::JsStringLike>(
-        id: S3,
+    pub async fn async_by_alias_js_string(
+        id: impl ::wasm_bindgen::JsStringLike,
     ) -> Result<JsString, JsValue>;
 }
 #[wasm_bindgen(module = "generic-mono-review", experimental_generic_mono)]
 extern "C" {
     #[wasm_bindgen(js_name = "withS")]
-    pub fn with_s<S3: ::wasm_bindgen::JsStringLike>(s: &S, s2: &S2, name: S3);
+    pub fn with_s(s: &S, s2: &S2, name: impl ::wasm_bindgen::JsStringLike);
 }
 #[wasm_bindgen(module = "generic-mono-review", experimental_generic_mono)]
 extern "C" {
     #[wasm_bindgen(catch, js_name = "withS")]
-    pub fn try_with_s<S3: ::wasm_bindgen::JsStringLike>(
+    pub fn try_with_s(
         s: &S,
         s2: &S2,
-        name: S3,
+        name: impl ::wasm_bindgen::JsStringLike,
     ) -> Result<(), JsValue>;
 }

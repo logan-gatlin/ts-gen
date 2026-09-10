@@ -1113,15 +1113,17 @@ rule is deliberately limited to user declarations. Built-in JS containers,
 tuples, iterators, and callbacks retain their established wrapper elements
 (`Array<JsString>`, `Map<JsString, JsString>`, and so on).
 
-Direct string arguments become fresh inferred `S: JsStringLike` parameters,
-allowing `&str`, `String`, `&JsString`, and `JsString` without caller-side
-conversion. String returns remain concrete and get one additive zero-copy
-variant bound to the same JS name:
+Direct string arguments use argument-position `impl JsStringLike`, allowing
+`&str`, `String`, `&JsString`, and `JsString` without caller-side conversion.
+Each occurrence is an independent anonymous type parameter, so different
+string arguments may use different representations without generated names
+that could shadow source declarations. String returns remain concrete and get
+one additive zero-copy variant bound to the same JS name:
 
 ```rust
-pub fn value<S: ::wasm_bindgen::JsStringLike>(default_value: S) -> String;
+pub fn value(default_value: impl ::wasm_bindgen::JsStringLike) -> String;
 #[wasm_bindgen(js_name = "value")]
-pub fn value_js_string<S: ::wasm_bindgen::JsStringLike>(default_value: S) -> JsString;
+pub fn value_js_string(default_value: impl ::wasm_bindgen::JsStringLike) -> JsString;
 ```
 
 The return transform preserves nullable, fallible, and locally declared

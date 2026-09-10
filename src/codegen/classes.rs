@@ -997,20 +997,19 @@ pub(crate) fn generate_dictionary_factory_with_passes(
             let builder_method_name = public_rust_name(builder_method_name);
             let method_ident = super::typemap::make_ident(&builder_method_name);
             let setter_ident = super::typemap::make_ident(&sig.rust_name);
-            let (string_bounds, params) = generate_concrete_params_with_mono_strings(
+            let params = generate_concrete_params_with_mono_strings(
                 &sig.params,
                 config.cgctx,
                 config.scope,
                 &config.from_module(),
             );
-            let string_generics = render_generic_bounds(&string_bounds);
             let param_idents: Vec<_> = sig
                 .params
                 .iter()
                 .map(|p| super::typemap::make_ident(&p.name))
                 .collect();
             builder_methods.push(quote! {
-                pub fn #method_ident #string_generics (self, #params) -> Self {
+                pub fn #method_ident (self, #params) -> Self {
                     self.inner.#setter_ident(#(#param_idents),*);
                     self
                 }
@@ -1368,7 +1367,7 @@ fn generic_bounds_for_method(config: &ClassConfig, sig: &FunctionSignature) -> V
 fn generate_expanded_constructor(config: &ClassConfig, sig: &FunctionSignature) -> TokenStream {
     let rust_ident = super::typemap::make_ident(&sig.rust_name);
     let scope = sig.body_scope;
-    let (string_bounds, params) = generate_concrete_params_with_mono_strings(
+    let params = generate_concrete_params_with_mono_strings(
         &sig.params,
         config.cgctx,
         scope,
@@ -1412,9 +1411,7 @@ fn generate_expanded_constructor(config: &ClassConfig, sig: &FunctionSignature) 
         .cgctx
         .is_some_and(|ctx| ctx.experimental_generic_mono)
     {
-        let mut bounds = generic_bounds_for_method(config, sig);
-        bounds.extend(string_bounds);
-        render_generic_bounds(&bounds)
+        render_generic_bounds(&generic_bounds_for_method(config, sig))
     } else {
         quote! {}
     };
@@ -1434,7 +1431,7 @@ fn generate_expanded_method(config: &ClassConfig, sig: &FunctionSignature) -> To
     // names through that scope so `T` (etc.) lowers to a bare ident
     // rather than slipping through to `emit_type_name`.
     let method_scope = sig.body_scope;
-    let (string_bounds, params) = generate_concrete_params_with_mono_strings(
+    let params = generate_concrete_params_with_mono_strings(
         &sig.params,
         config.cgctx,
         method_scope,
@@ -1486,9 +1483,7 @@ fn generate_expanded_method(config: &ClassConfig, sig: &FunctionSignature) -> To
         quote! {}
     };
 
-    let mut bounds = generic_bounds_for_method(config, sig);
-    bounds.extend(string_bounds);
-    let method_generics = render_generic_bounds(&bounds);
+    let method_generics = render_generic_bounds(&generic_bounds_for_method(config, sig));
     let this_generics = config.type_generics_args();
 
     quote! {
@@ -1503,7 +1498,7 @@ fn generate_expanded_static_method(config: &ClassConfig, sig: &FunctionSignature
     let rust_ident = super::typemap::make_ident(&sig.rust_name);
     let class_ident = super::typemap::make_ident(&config.effective_rust_name());
     let scope = sig.body_scope;
-    let (string_bounds, params) = generate_concrete_params_with_mono_strings(
+    let params = generate_concrete_params_with_mono_strings(
         &sig.params,
         config.cgctx,
         scope,
@@ -1554,9 +1549,7 @@ fn generate_expanded_static_method(config: &ClassConfig, sig: &FunctionSignature
         quote! {}
     };
 
-    let mut bounds = generic_bounds_for_method(config, sig);
-    bounds.extend(string_bounds);
-    let generics = render_generic_bounds(&bounds);
+    let generics = render_generic_bounds(&generic_bounds_for_method(config, sig));
 
     quote! {
         #doc
