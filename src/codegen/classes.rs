@@ -405,6 +405,7 @@ pub(crate) fn generate_dictionary_factory_with_passes(
     // interpolation leaves the bare identifier intact.
     let type_args = config.type_generics_args();
     let type_decl = config.helper_generics_decl();
+    let builder_struct_decl = config.type_generics_decl();
     let rust_type = quote! { #rust_type_ident #type_args };
     let builder_name = quote! { #builder_name_ident #type_args };
 
@@ -1024,7 +1025,7 @@ pub(crate) fn generate_dictionary_factory_with_passes(
                 #(#builder_variants)*
             }
 
-            pub struct #builder_name_ident #type_decl {
+            pub struct #builder_name_ident #builder_struct_decl {
                 inner: #rust_type,
             }
 
@@ -1243,17 +1244,7 @@ pub(crate) fn generate_extern_block(config: &ClassConfig) -> TokenStream {
     }
 
     // Build the extern block with optional module attribute
-    let per_mono = config
-        .cgctx
-        .is_some_and(|ctx| ctx.experimental_generic_mono);
-    let wb_extern_attr = match (&config.module, per_mono) {
-        (Some(m), true) => {
-            quote! { #[wasm_bindgen(module = #m, experimental_generic_mono)] }
-        }
-        (Some(m), false) => quote! { #[wasm_bindgen(module = #m)] },
-        (None, true) => quote! { #[wasm_bindgen(experimental_generic_mono)] },
-        (None, false) => quote! { #[wasm_bindgen] },
-    };
+    let wb_extern_attr = CodegenContext::extern_attr(config.cgctx, config.module.as_deref());
 
     // Re-export the type under its original (un-suffixed) name when collision
     // resolution renamed it. The suffixed name (`Foo_`) is purely an internal
@@ -1391,6 +1382,7 @@ fn generate_expanded_constructor(config: &ClassConfig, sig: &FunctionSignature) 
         &sig.return_type,
         sig.catch,
         sig.is_async,
+        sig.js_string_return,
         sig.error_type.as_ref(),
         config.cgctx,
         scope,
@@ -1471,6 +1463,7 @@ fn generate_expanded_method(config: &ClassConfig, sig: &FunctionSignature) -> To
         &sig.return_type,
         sig.catch,
         sig.is_async,
+        sig.js_string_return,
         sig.error_type.as_ref(),
         config.cgctx,
         method_scope,
@@ -1538,6 +1531,7 @@ fn generate_expanded_static_method(config: &ClassConfig, sig: &FunctionSignature
         &sig.return_type,
         sig.catch,
         sig.is_async,
+        sig.js_string_return,
         sig.error_type.as_ref(),
         config.cgctx,
         scope,
@@ -1635,17 +1629,18 @@ fn generate_getter(
 
     let js_string_variant = config
         .cgctx
-        .filter(|ctx| ctx.experimental_generic_mono)
-        .and_then(|ctx| super::signatures::js_string_return_type(&lowered_ty, ctx))
-        .map(|js_ty| {
+        .filter(|ctx| {
+            ctx.experimental_generic_mono
+                && super::typemap::has_mono_js_string_return(&lowered_ty, ctx, config.scope)
+        })
+        .map(|ctx| {
             let js_name = dedupe_name(&format!("{rust_name}_js_string"), used_names);
             let js_ident = super::typemap::make_ident(&js_name);
-            let js_type = super::typemap::to_getter_return_type(
-                &js_ty,
-                config.cgctx,
+            let js_type = super::typemap::to_js_string_getter_return_type(
+                &lowered_ty,
+                ctx,
                 config.scope,
                 &config.from_module(),
-                anchor,
             );
             let source_name = &getter.js_name;
             quote! {
@@ -1781,21 +1776,18 @@ fn generate_static_getter(
 
     let js_string_variant = config
         .cgctx
-        .filter(|ctx| ctx.experimental_generic_mono)
-        .and_then(|ctx| super::signatures::js_string_return_type(&getter.type_ref, ctx))
-        .map(|js_ty| {
+        .filter(|ctx| {
+            ctx.experimental_generic_mono
+                && super::typemap::has_mono_js_string_return(&getter.type_ref, ctx, config.scope)
+        })
+        .map(|ctx| {
             let js_name = dedupe_name(&format!("{rust_name}_js_string"), used_names);
             let js_ident = super::typemap::make_ident(&js_name);
-            let js_type = super::typemap::to_getter_return_type(
-                &js_ty,
-                config.cgctx,
+            let js_type = super::typemap::to_js_string_getter_return_type(
+                &getter.type_ref,
+                ctx,
                 config.scope,
                 &config.from_module(),
-                super::typemap::ReturnAnchor {
-                    base: &getter.js_name,
-                    kind: super::typemap::ReturnAnchorKind::Getter,
-                    parent: Some(&config.rust_name),
-                },
             );
             let source_name = &getter.js_name;
             quote! {

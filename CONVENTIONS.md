@@ -1087,8 +1087,13 @@ sites. The extern declarations themselves remain unconstrained:
 
 ```rust
 impl<T: ::wasm_bindgen::convert::IntoWasmAbi> EvaluationDetails<T> { /* … */ }
-pub struct EvaluationDetailsBuilder<T: ::wasm_bindgen::convert::IntoWasmAbi> { /* … */ }
+pub struct EvaluationDetailsBuilder<T> { /* … */ }
+impl<T: ::wasm_bindgen::convert::IntoWasmAbi> EvaluationDetailsBuilder<T> { /* … */ }
 ```
+
+The ABI bound stays on helper `impl` blocks whose methods call generated
+setters. It is not attached to the builder struct itself, so merely storing or
+returning a builder does not constrain its type parameter.
 
 Array-buffer-view helper parameters retain their `TypedArray` widening bound.
 In per-monomorphization mode the helper also repeats the reference ABI bound
@@ -1123,6 +1128,12 @@ The return transform preserves nullable, fallible, and locally declared
 generic wrappers. If a return has multiple eligible string leaves, one
 `_js_string` method replaces all of them rather than generating a Cartesian
 set of variants.
+
+Async primitive returns also use native Rust values in this mode. Thus
+`Promise<string>`, `Promise<number>`, and `Promise<boolean>` become
+`Result<String, _>`, `Result<f64, _>`, and `Result<bool, _>` respectively;
+without the flag they retain the established `JsString`, `Number`, and
+`Boolean` wrapper returns.
 
 This can increase code size because wasm-bindgen generates a separate shim and
 descriptor for every instantiation. The option is experimental and tracks the

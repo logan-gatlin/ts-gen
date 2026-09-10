@@ -65,7 +65,7 @@ impl<T: ::wasm_bindgen::convert::IntoWasmAbi> EvaluationDetails<T> {
         EvaluationDetailsBuilder { inner }
     }
 }
-pub struct EvaluationDetailsBuilder<T: ::wasm_bindgen::convert::IntoWasmAbi> {
+pub struct EvaluationDetailsBuilder<T> {
     inner: EvaluationDetails<T>,
 }
 impl<T: ::wasm_bindgen::convert::IntoWasmAbi> EvaluationDetailsBuilder<T> {

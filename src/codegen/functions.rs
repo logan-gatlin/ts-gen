@@ -90,6 +90,7 @@ fn generate_expanded_free_function(
         &sig.return_type,
         sig.catch,
         sig.is_async,
+        sig.js_string_return,
         sig.error_type.as_ref(),
         cgctx,
         scope,
@@ -142,15 +143,11 @@ fn generate_expanded_free_function(
         quote! {}
     };
 
-    let per_mono = cgctx.is_some_and(|ctx| ctx.experimental_generic_mono);
-    let wb_extern_attr = match (ctx, per_mono) {
-        (ModuleContext::Module(m), true) => {
-            quote! { #[wasm_bindgen(module = #m, experimental_generic_mono)] }
-        }
-        (ModuleContext::Module(m), false) => quote! { #[wasm_bindgen(module = #m)] },
-        (ModuleContext::Global, true) => quote! { #[wasm_bindgen(experimental_generic_mono)] },
-        (ModuleContext::Global, false) => quote! { #[wasm_bindgen] },
+    let module = match ctx {
+        ModuleContext::Module(module) => Some(module.as_ref()),
+        ModuleContext::Global => None,
     };
+    let wb_extern_attr = CodegenContext::extern_attr(cgctx, module);
 
     let mut bounds = generic_bounds_for_function(sig, cgctx);
     bounds.extend(string_bounds);
@@ -224,15 +221,11 @@ pub fn generate_variable(
 
     let wb_attr = quote! { #[wasm_bindgen(#(#wb_parts),*)] };
 
-    let per_mono = cgctx.is_some_and(|ctx| ctx.experimental_generic_mono);
-    let wb_extern_attr = match (ctx, per_mono) {
-        (ModuleContext::Module(m), true) => {
-            quote! { #[wasm_bindgen(module = #m, experimental_generic_mono)] }
-        }
-        (ModuleContext::Module(m), false) => quote! { #[wasm_bindgen(module = #m)] },
-        (ModuleContext::Global, true) => quote! { #[wasm_bindgen(experimental_generic_mono)] },
-        (ModuleContext::Global, false) => quote! { #[wasm_bindgen] },
+    let module = match ctx {
+        ModuleContext::Module(module) => Some(module.as_ref()),
+        ModuleContext::Global => None,
     };
+    let wb_extern_attr = CodegenContext::extern_attr(cgctx, module);
 
     quote! {
         #wb_extern_attr
