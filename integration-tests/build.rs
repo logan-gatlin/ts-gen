@@ -220,11 +220,9 @@ fn generate_bindings(entry: &Entry, out_dir: &Path) {
     let mut exports: std::collections::HashSet<ts_gen::codegen::ExportSpec> =
         std::collections::HashSet::new();
     exports.insert(ts_gen::codegen::ExportSpec::Module(entry.lib_name.clone()));
-    let options = ts_gen::codegen::GenerateOptions {
-        errors_as_error: false,
-        experimental_generic_mono: entry.experimental_generic_mono,
-        exports,
-    };
+    let options = ts_gen::codegen::GenerateOptions::new()
+        .experimental_generic_mono(entry.experimental_generic_mono)
+        .exports(exports);
     let rust_code = ts_gen::codegen::generate_with_options(&module, &gctx, &options)
         .unwrap_or_else(|e| panic!("codegen failed for {}: {e}", entry.mod_name));
 

@@ -147,11 +147,10 @@ fn main() -> Result<()> {
         }
     }
 
-    let options = ts_gen::codegen::GenerateOptions {
-        errors_as_error: cli.errors_as_error,
-        experimental_generic_mono: cli.experimental_generic_mono,
-        exports,
-    };
+    let options = ts_gen::codegen::GenerateOptions::new()
+        .errors_as_error(cli.errors_as_error)
+        .experimental_generic_mono(cli.experimental_generic_mono)
+        .exports(exports);
     let rust_source = ts_gen::codegen::generate_with_options(&module, &gctx, &options)?;
 
     // Write output file, creating parent directories if needed
