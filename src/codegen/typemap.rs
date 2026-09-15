@@ -577,6 +577,26 @@ impl<'a> CodegenContext<'a> {
         self.resolve_alias_impl(name, scope, &mut visited)
     }
 
+    /// Resolve a named string-literal set that parsing promoted to a string enum.
+    pub(crate) fn resolve_string_literal_set(
+        &self,
+        name: &str,
+        scope: ScopeId,
+    ) -> Option<Vec<String>> {
+        let type_id = self.gctx.scopes.resolve(scope, name)?;
+        let decl = self.gctx.get_type(type_id);
+        let TypeKind::StringEnum(string_enum) = &decl.kind else {
+            return None;
+        };
+        Some(
+            string_enum
+                .variants
+                .iter()
+                .map(|variant| variant.js_value.clone())
+                .collect(),
+        )
+    }
+
     fn resolve_alias_impl<'b>(
         &'b self,
         name: &str,
@@ -657,6 +677,12 @@ impl<'a> CodegenContext<'a> {
                 self.local_type_param_counts
                     .insert(d.name.clone(), d.type_params.len());
             }
+            ir::TypeKind::Record(r) => {
+                self.local_types.insert(r.name.clone(), mctx.clone());
+                self.local_type_ids.insert(type_id);
+                self.local_type_param_counts
+                    .insert(r.name.clone(), r.type_params.len());
+            }
             ir::TypeKind::StringEnum(e) => {
                 self.local_types.insert(e.name.clone(), mctx.clone());
                 self.local_type_ids.insert(type_id);
@@ -699,6 +725,9 @@ impl<'a> CodegenContext<'a> {
             }
             ir::TypeKind::DiscriminatedUnion(d) => {
                 self.local_types.insert(d.name.clone(), mctx.clone());
+            }
+            ir::TypeKind::Record(r) => {
+                self.local_types.insert(r.name.clone(), mctx.clone());
             }
             ir::TypeKind::StringEnum(e) => {
                 self.local_types.insert(e.name.clone(), mctx.clone());
@@ -764,6 +793,7 @@ fn type_decl_name(kind: &ir::TypeKind) -> Option<&str> {
         ir::TypeKind::Class(c) => Some(&c.name),
         ir::TypeKind::Interface(i) => Some(&i.name),
         ir::TypeKind::DiscriminatedUnion(d) => Some(&d.name),
+        ir::TypeKind::Record(r) => Some(&r.name),
         ir::TypeKind::TypeAlias(a) => Some(&a.name),
         ir::TypeKind::StringEnum(e) => Some(&e.name),
         ir::TypeKind::NumericEnum(e) => Some(&e.name),
